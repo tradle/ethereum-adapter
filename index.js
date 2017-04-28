@@ -44,12 +44,12 @@ function requireReady (engine, fn) {
   }
 }
 
-function createNetwork (opts) {
+function createNetwork ({ networkName, constants }) {
   return {
     blockchain: 'ethereum',
-    name: opts.networkName,
+    name: networkName,
     minOutputAmount: 1,
-    constants: opts.constants,
+    constants: constants || networks[networkName],
     pubKeyToAddress,
     generateKey
   }
