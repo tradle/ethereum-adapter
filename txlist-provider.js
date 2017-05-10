@@ -10,11 +10,6 @@ const {
 } = require('eth-tx-finder')
 
 const noop = function () {}
-
-// const RPC_ENDPOINT = 'https://mainnet.infura.io/'
-const targetAccount = '0x6aaa5f611b08f8ae98d377ba3f09b1717822b322'
-// const targetAccount = '0x7773dc77b66d96ee4c2f72cdc402349366c7b11d'
-
 const Subprovider = require('web3-provider-engine/subproviders/subprovider')
 
 inherits(TxListProvider, Subprovider)
@@ -50,14 +45,13 @@ function flatten (arr) {
 }
 
 function listTransactions ({ address, startblock=0, endblock=Infinity, rpcUrl }, cb) {
-  findTxsFrom({ address, startblock, endblock, rpcUrl }, function (err, from) {
+  async.parallel([
+    done => findTxsFrom({ address, startblock, endblock, rpcUrl }, done),
+    done => findTxsTo({ address, startblock, endblock, rpcUrl }, done)
+  ], function (err, results) {
     if (err) return cb(err)
 
-    findTxsTo({ address, startblock, endblock, rpcUrl }, function (err, to) {
-      if (err) return cb(err)
-
-      cb(null, from.concat(to))
-    })
+    cb(null, flatten(results))
   })
 }
 
