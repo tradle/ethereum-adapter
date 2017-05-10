@@ -67,7 +67,8 @@ function createBlockchainAPI ({ engine }) {
       propagate: requireReady(engine, sendRawTx)
     },
     addresses: {
-      transactions: requireReady(engine, getTxsForAccounts)
+      transactions: requireReady(engine, getTxsForAccounts),
+      balance: requireReady(engine, getBalance.bind(null, engine))
     }
   })
 
@@ -176,7 +177,19 @@ function createBlockchainAPI ({ engine }) {
   }
 }
 
-function createTransactor ({ network, engine, wallet }) {
+function getBalance (engine, address, cb) {
+  engine.sendAsync(createPayload({
+    method: 'eth_getBalance',
+    params: [address, 'latest']
+  }), function (err, res) {
+    if (err) return cb(err)
+
+    // balance in wei
+    cb(null, res.result)
+  })
+}
+
+function createTransactor ({ network, engine, wallet, privateKey }) {
   function signAndSend ({ to }, cb) {
     if (to.length !== 1) throw new Error('only one recipient allowed')
 
@@ -186,13 +199,6 @@ function createTransactor ({ network, engine, wallet }) {
         amount
       }
     })[0]
-
-    // engine.sendAsync(createPayload({
-    //   method: 'eth_getBalance',
-    //   params: [wallet.getAddressString(), 'latest']
-    // }), function (err, results) {
-    //   console.log('BALANCE', err || results)
-    // })
 
     engine.sendAsync(createPayload({
       method: 'eth_sendTransaction',
@@ -216,10 +222,12 @@ function createTransactor ({ network, engine, wallet }) {
     }))
   }
 
+  wallet = getWallet({ wallet, privateKey })
   return {
     multipleRecipientsAllowed: false,
     send: requireReady(engine, signAndSend),
-    close: engine.stop.bind(engine)
+    close: engine.stop.bind(engine),
+    balance: getBalance.bind(null, engine, wallet.getAddressString())
   }
 }
 
@@ -275,7 +283,7 @@ function createEngine (opts) {
 
   let wallet
   if (opts.wallet || opts.privateKey) {
-    wallet = opts.wallet || Wallet.fromPrivateKey(opts.privateKey)
+    wallet = getWallet(opts)
     engine.addProvider(new WalletSubprovider(wallet, opts))
     // id mgmt
     const idmgmtSubprovider = new HookedWalletSubprovider({
@@ -368,4 +376,8 @@ function flatten (arr) {
   return arr.reduce(function (all, some) {
     return all.concat(some)
   }, [])
+}
+
+function getWallet ({ privateKey, wallet }) {
+  return wallet || Wallet.fromPrivateKey(privateKey)
 }
