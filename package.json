@@ -3,20 +3,31 @@
   "version": "1.0.0",
   "main": "index.js",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tradle/ethereum-adapter"
+  },
   "scripts": {
     "lint": "eslint --quiet --ignore-path .gitignore ."
   },
   "dependencies": {
     "async": "^2.1.5",
+    "eth-store": "^2.2.0",
+    "eth-tx-finder": "github:mvayngrib/eth-tx-finder",
     "ethereumjs-util": "^5.1.1",
     "ethereumjs-wallet": "mvayngrib/ethereumjs-wallet",
     "lexicographic-integer": "^1.1.0",
     "object.omit": "^2.0.1",
-    "web3-provider-engine": "mvayngrib/provider-engine"
+    "request": "^2.81.0",
+    "web3-provider-engine": "mvayngrib/provider-engine",
+    "xhr": "^2.4.0",
+    "xtend": "^4.0.1"
   },
   "devDependencies": {
     "eslint": "^3.19.0",
-    "eth-tx-finder": "mvayngrib/eth-tx-finder",
     "ethereumjs-testrpc": "^3.0.3"
+  },
+  "browser": {
+    "request": false
   }
 }

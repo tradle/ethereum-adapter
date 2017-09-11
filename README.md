@@ -20,3 +20,7 @@ const node = tradle.node({
   // ..
 })
 ```
+
+## Todo
+
+to enable new version detection the deterministic address can be put in the data field. In bitcoin-adapter, it's put in a 2nd output address.
