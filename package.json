@@ -19,7 +19,7 @@
     "lexicographic-integer": "^1.1.0",
     "object.omit": "^2.0.1",
     "request": "^2.81.0",
-    "web3-provider-engine": "mvayngrib/provider-engine",
+    "web3-provider-engine": "^13.2.9",
     "xhr": "^2.4.0",
     "xtend": "^4.0.1"
   },
