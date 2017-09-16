@@ -39,6 +39,7 @@ function requireReady (engine, fn) {
     if (ready) return fn.apply(this, args)
 
     engine.once('block', () => {
+      debugger
       fn.apply(this, args)
     })
   }
@@ -56,8 +57,11 @@ function createNetwork ({ networkName, constants }) {
 }
 
 function createBlockchainAPI ({ engine }) {
+  const stop = engine.stop.bind(engine)
   const blockchain = extend(new EventEmitter(), {
-    close: engine.stop.bind(engine),
+    close: stop,
+    stop: stop,
+    start: engine.start.bind(engine),
     info: requireReady(engine, getLatestBlock),
     blocks: {
       latest: requireReady(engine, getLatestBlock)
@@ -191,6 +195,9 @@ function getBalance (engine, address, cb) {
 
 function createTransactor ({ network, engine, wallet, privateKey }) {
   function signAndSend ({ to }, cb) {
+    // if not started
+    engine.start()
+
     if (to.length !== 1) throw new Error('only one recipient allowed')
 
     to = to.map(({ address, amount }) => {
@@ -225,8 +232,9 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
   wallet = getWallet({ wallet, privateKey })
   return {
     multipleRecipientsAllowed: false,
-    send: requireReady(engine, signAndSend),
-    close: engine.stop.bind(engine),
+    send: signAndSend,
+    start: engine.start.bind(engine),
+    stop: engine.stop.bind(engine),
     balance: getBalance.bind(null, engine, wallet.getAddressString())
   }
 }
@@ -322,7 +330,10 @@ function createEngine (opts) {
     engine.addProvider(new EtherscanSubprovider({ network: opts.networkName }))
   }
 
-  engine.start()
+  if (opts.autostart !== false) {
+    engine.start()
+  }
+
   engine.setMaxListeners(Infinity)
   engine.once('block', () => {
     ENGINE_READY_MAP.set(engine, true)
