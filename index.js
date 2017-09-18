@@ -2,6 +2,7 @@ const { EventEmitter } = require('events')
 const { mapLimit } = require('async')
 const extend = require('xtend/mutable')
 const omit = require('object.omit')
+const debug = require('debug')('@tradle/ethereum-adapter')
 const lexint = require('lexicographic-integer')
 const ProviderEngine = require('web3-provider-engine')
 const DefaultFixture = require('web3-provider-engine/subproviders/default-fixture.js')
@@ -198,7 +199,9 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
     // if not started
     engine.start()
 
-    if (to.length !== 1) throw new Error('only one recipient allowed')
+    if (to.length !== 1) {
+      return process.nextTick(() => cb(new Error('only one recipient allowed')))
+    }
 
     to = to.map(({ address, amount }) => {
       return {
@@ -207,6 +210,7 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
       }
     })[0]
 
+    debug('sending transaction')
     engine.sendAsync(createPayload({
       method: 'eth_sendTransaction',
       params: [

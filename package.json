@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "async": "^2.1.5",
+    "debug": "^3.0.1",
     "eth-store": "^2.2.0",
     "eth-tx-finder": "github:mvayngrib/eth-tx-finder",
     "ethereumjs-util": "^5.1.1",
