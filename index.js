@@ -40,7 +40,6 @@ function requireReady (engine, fn) {
     if (ready) return fn.apply(this, args)
 
     engine.once('block', () => {
-      debugger
       fn.apply(this, args)
     })
   }
