@@ -15,7 +15,7 @@ const RpcSubprovider = require('web3-provider-engine/subproviders/rpc.js')
 const EtherscanSubprovider = require('web3-provider-engine/subproviders/etherscan')
 const TxListSubprovider = require('./txlist-provider')
 const GasPriceSubprovider = require('web3-provider-engine/subproviders/gasprice.js')
-const VMSubprovider = require('web3-provider-engine/subproviders/vm.js')
+// const VMSubprovider = require('web3-provider-engine/subproviders/vm.js')
 const createPayload = require('web3-provider-engine/util/create-payload')
 const Wallet = require('ethereumjs-wallet')
 const WalletSubprovider = require('ethereumjs-wallet/provider-engine')
@@ -214,14 +214,11 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
       method: 'eth_sendTransaction',
       params: [
         {
-          // nonce: '0x00',
-          // gas: 0,
-          // gasPrice: 100,
-          // gasLimit: 0,
+          gasLimit: 50000, // 21000 is min?
           from: wallet.getAddressString(),
-          to: to.address, //'0xbed89f9d47ae4f38045da1a45d99589f75eae942',
-          value: hexint(to.amount), // '0x01',
-          // EIP 155 chainId - mainnet: 1, ropsten: 3
+          to: to.address,
+          value: prefixHex(to.amount.toString(16)),
+          // EIP 155 chainId - mainnet: 1, ropsten: 3, rinkeby: 54
           chainId: network.constants.chainId
         }
       ]
@@ -321,7 +318,7 @@ function createEngine (opts) {
   }
 
   engine.addProvider(new GasPriceSubprovider())
-  engine.addProvider(new VMSubprovider())
+  // engine.addProvider(new VMSubprovider())
 
   // data sources
   if (rpcUrl) {
