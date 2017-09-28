@@ -194,7 +194,7 @@ function getBalance (engine, address, cb) {
 }
 
 function createTransactor ({ network, engine, wallet, privateKey }) {
-  function signAndSend ({ to }, cb) {
+  function signAndSend ({ to, data }, cb) {
     // if not started
     engine.start()
 
@@ -210,18 +210,22 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
     })[0]
 
     debug('sending transaction')
+    const params = {
+      gasLimit: 50000, // 21000 is min?
+      from: wallet.getAddressString(),
+      to: to.address,
+      value: prefixHex(to.amount.toString(16)),
+      // EIP 155 chainId - mainnet: 1, ropsten: 3, rinkeby: 54
+      chainId: network.constants.chainId
+    }
+
+    if (data) {
+      params.data = data
+    }
+
     engine.sendAsync(createPayload({
       method: 'eth_sendTransaction',
-      params: [
-        {
-          gasLimit: 50000, // 21000 is min?
-          from: wallet.getAddressString(),
-          to: to.address,
-          value: prefixHex(to.amount.toString(16)),
-          // EIP 155 chainId - mainnet: 1, ropsten: 3, rinkeby: 54
-          chainId: network.constants.chainId
-        }
-      ]
+      params: [params]
     }), wrapCB(function (err, txId) {
       if (err) return cb(err)
 
