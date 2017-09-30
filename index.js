@@ -117,7 +117,7 @@ function createBlockchainAPI ({ engine }) {
       height = undefined
     }
 
-    if (height && height > chainHeight) return cb(null, [])
+    if (height && height > blockHeight) return cb(null, [])
 
     mapLimit(addresses, MAX_CONCURRENT_REQUESTS, function (address, done) {
       getTxsForAccount(address, height, done)
@@ -138,7 +138,14 @@ function createBlockchainAPI ({ engine }) {
         'asc'
       ],
     }), function (err, result) {
-      if (err) return cb(err)
+      if (err) {
+        if (/no transactions/i.test(err.message)) {
+          debug(`no transactions found for address ${addressHex}`)
+          return cb(null, [])
+        }
+
+        return cb(err)
+      }
 
       // Etherscan.io
       //
