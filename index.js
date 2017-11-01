@@ -119,6 +119,14 @@ function createBlockchainAPI ({ engine }) {
 
     if (height && height > blockHeight) return cb(null, [])
 
+    addresses = addresses.filter(address => {
+      if (!address) {
+        console.warn('undefined address passed in')
+      }
+
+      return address
+    })
+
     mapLimit(addresses, MAX_CONCURRENT_REQUESTS, function (address, done) {
       getTxsForAccount(address, height, done)
     }, function (err, results) {

@@ -6,7 +6,8 @@ const EthQuery = require('eth-store/query')
 const {
   findAllTxs,
   findAllTxsTo,
-  findAllTxsInRange
+  findAllTxsInRange,
+  findAllTxsInRangeTo
 } = require('eth-tx-finder')
 
 const noop = function () {}
