@@ -199,7 +199,7 @@ function createBlockchainAPI ({ engine }) {
 function getBalance (engine, address, cb) {
   engine.sendAsync(createPayload({
     method: 'eth_getBalance',
-    params: [address, 'latest']
+    params: [prefixHex(address), 'latest']
   }), function (err, res) {
     if (err) return cb(err)
 
