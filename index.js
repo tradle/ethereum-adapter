@@ -30,7 +30,7 @@ module.exports = {
   createNetwork,
   createEngine,
   createTransactor,
-  createBlockchainAPI
+  createBlockchainAPI,
 }
 
 function requireReady (engine, fn) {
@@ -46,19 +46,23 @@ function requireReady (engine, fn) {
 }
 
 function createNetwork ({ networkName, constants }) {
-  return {
+  const network = {
     blockchain: 'ethereum',
     name: networkName,
     minOutputAmount: 1,
     constants: constants || networks[networkName],
     pubKeyToAddress,
-    generateKey
+    generateKey,
+    createBlockchainAPI: opts => createBlockchainAPI(extend({ network }, opts))
   }
+
+  return network
 }
 
-function createBlockchainAPI ({ engine }) {
+function createBlockchainAPI ({ network, engine }) {
   const stop = engine.stop.bind(engine)
   const blockchain = extend(new EventEmitter(), {
+    network,
     close: stop,
     stop: stop,
     start: engine.start.bind(engine),
