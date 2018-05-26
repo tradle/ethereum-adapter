@@ -203,7 +203,8 @@ function createBlockchainAPI ({ network, engine }) {
           },
           to: {
             addresses: [txInfo.to].map(unprefixHex)
-          }
+          },
+          data: unprefixHex(txInfo.input || '')
         }
       })
 
