@@ -45,7 +45,9 @@ function requireReady (engine, fn) {
   }
 }
 
-function createNetwork ({ networkName, constants }) {
+function createNetwork ({ networkName, constants, engineOpts }) {
+  let api
+
   const network = {
     blockchain: 'ethereum',
     name: networkName,
@@ -53,6 +55,15 @@ function createNetwork ({ networkName, constants }) {
     constants: constants || networks[networkName],
     pubKeyToAddress,
     generateKey,
+    get api() {
+      if (!api) {
+        engine = createEngine(engineOpts)
+        api = network.createBlockchainAPI({ engine })
+      }
+
+      return api
+    },
+    createTransactor: opts => createTransactor(extend({ network }, opts)),
     createBlockchainAPI: opts => createBlockchainAPI(extend({ network }, opts))
   }
 
@@ -258,6 +269,7 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
     send: signAndSend,
     start: engine.start.bind(engine),
     stop: engine.stop.bind(engine),
+    close: engine.stop.bind(engine),
     balance: getBalance.bind(null, engine, wallet.getAddressString())
   }
 }
