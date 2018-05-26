@@ -53,6 +53,7 @@ function createNetwork ({ networkName, constants, engineOpts }) {
     name: networkName,
     minOutputAmount: 1,
     constants: constants || networks[networkName],
+    curve: 'secp256k1',
     pubKeyToAddress,
     generateKey,
     get api() {
