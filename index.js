@@ -13,17 +13,29 @@ const HookedWalletSubprovider = require('web3-provider-engine/subproviders/hooke
 const SanitizingSubprovider = require('web3-provider-engine/subproviders/sanitizer.js')
 const RpcSubprovider = require('web3-provider-engine/subproviders/rpc.js')
 const EtherscanSubprovider = require('web3-provider-engine/subproviders/etherscan')
-const TxListSubprovider = require('./txlist-provider')
 const GasPriceSubprovider = require('web3-provider-engine/subproviders/gasprice.js')
 // const VMSubprovider = require('web3-provider-engine/subproviders/vm.js')
 const createPayload = require('web3-provider-engine/util/create-payload')
 const Wallet = require('ethereumjs-wallet')
 const WalletSubprovider = require('ethereumjs-wallet/provider-engine')
 const ethUtil = require('ethereumjs-util')
+const TxListSubprovider = require('./txlist-provider')
 const networks = require('./networks')
 
 const MAX_CONCURRENT_REQUESTS = 3
 const ENGINE_READY_MAP = new WeakMap()
+// see https://www.myetherwallet.com/helpers.html
+const WEI = 1000000000
+const gasPriceByPriority = {
+  // aim for next few minutes
+  low: hexint(2 * WEI), // 2 gwei
+  // aim for next few blocks
+  high: hexint(20 * WEI), // 20 gwei
+  // aim for next block
+  top: hexint(40 * WEI), // 40 gwei
+}
+
+const MIN_GAS_LIMIT = 21000
 
 module.exports = {
   networks,
@@ -31,6 +43,7 @@ module.exports = {
   createEngine,
   createTransactor,
   createBlockchainAPI,
+  gasPriceByPriority
 }
 
 function requireReady (engine, fn) {
@@ -226,7 +239,14 @@ function getBalance (engine, address, cb) {
 }
 
 function createTransactor ({ network, engine, wallet, privateKey }) {
-  function signAndSend ({ to, data }, cb) {
+
+  function signAndSend ({
+    to,
+    data,
+    gasPrice,
+    gasLimit=MIN_GAS_LIMIT,
+    gasPrice=gasPriceByPriority.low
+  }, cb) {
     // if not started
     engine.start()
 
@@ -243,7 +263,8 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
 
     debug('sending transaction')
     const params = {
-      gasLimit: 50000, // 21000 is min?
+      gasLimit, // 21000 is min?
+      gasPrice,
       from: wallet.getAddressString(),
       to: to.address,
       value: prefixHex(to.amount.toString(16)),
