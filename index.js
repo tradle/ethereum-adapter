@@ -243,7 +243,6 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
   function signAndSend ({
     to,
     data,
-    gasPrice,
     gasLimit=MIN_GAS_LIMIT,
     gasPrice=gasPriceByPriority.low
   }, cb) {
