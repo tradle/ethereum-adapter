@@ -60,6 +60,7 @@ function requireReady (engine, fn) {
 
 function createNetwork ({ networkName, constants, engineOpts }) {
   let api
+  let engine
 
   const network = {
     blockchain: 'ethereum',
@@ -71,14 +72,26 @@ function createNetwork ({ networkName, constants, engineOpts }) {
     generateKey,
     get api() {
       if (!api) {
-        engine = createEngine(engineOpts)
-        api = network.createBlockchainAPI({ engine })
+        api = network.createBlockchainAPI({ engine: network.engine })
       }
 
       return api
     },
-    createTransactor: opts => createTransactor(extend({ network }, opts)),
-    createBlockchainAPI: opts => createBlockchainAPI(extend({ network }, opts))
+    get engine() {
+      if (!engine) {
+        engine = createEngine(engineOpts)
+      }
+
+      return engine
+    },
+    createTransactor: (opts={}) => createTransactor(extend({
+      network,
+      engine: network.engine
+    }, opts)),
+    createBlockchainAPI: (opts={}) => createBlockchainAPI(extend({
+      network,
+      engine: network.engine
+    }, opts))
   }
 
   return network
