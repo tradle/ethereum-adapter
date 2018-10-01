@@ -3,7 +3,7 @@ const { mapLimit } = require('async')
 const extend = require('xtend/mutable')
 const omit = require('object.omit')
 const debug = require('debug')('@tradle/ethereum-adapter')
-const lexint = require('lexicographic-integer')
+const BN = require('bn.js')
 const ProviderEngine = require('web3-provider-engine')
 const DefaultFixture = require('web3-provider-engine/subproviders/default-fixture.js')
 const NonceTrackerSubprovider = require('web3-provider-engine/subproviders/nonce-tracker.js')
@@ -258,9 +258,9 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
   function signAndSend ({
     to,
     data,
-    gas=MIN_GAS_LIMIT,
+    gas,
     gasLimit=MIN_GAS_LIMIT,
-    gasPrice=gasPriceByPriority.mediumHigh,
+    gasPrice,//=gasPriceByPriority.mediumHigh,
   }, cb) {
     // if not started
     engine.start()
@@ -277,20 +277,17 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
     })[0]
 
     debug('sending transaction')
-    const params = {
+    const params = pickNonNull({
       gas,
       gasLimit,
       gasPrice,
       from: wallet.getAddressString(),
       to: to.address,
-      value: prefixHex(to.amount.toString(16)),
+      value: '0x0', //prefixHex(to.amount.toString(16)),
       // EIP 155 chainId - mainnet: 1, ropsten: 3, rinkeby: 54
-      chainId: network.constants.chainId
-    }
-
-    if (data) {
-      params.data = data
-    }
+      chainId: network.constants.chainId,
+      data,
+    })
 
     engine.sendAsync(createPayload({
       method: 'eth_sendTransaction',
@@ -341,7 +338,7 @@ function pubKeyToAddress (pub) {
 }
 
 function createEngine (opts) {
-  const { rpcUrl } = opts
+  let { rpcUrl, maxPriceInWei } = opts
   const engine = new ProviderEngine(opts)
 
   // static
@@ -366,7 +363,29 @@ function createEngine (opts) {
   let wallet
   if (opts.wallet || opts.privateKey) {
     wallet = getWallet(opts)
-    engine.addProvider(new WalletSubprovider(wallet, opts))
+
+    const walletProvider = new WalletSubprovider(wallet, opts)
+    if (maxPriceInWei) {
+      maxPriceInWei = new BN(maxPriceInWei)
+      const { signTransaction } = walletProvider
+      walletProvider.signTransaction = (...args) => {
+        const { gasPrice, gas, value } = args[0]
+        // gas: "0x5208"
+        // gasPrice: 19900000000
+        // value: "0x1"
+        const priceInWei = new BN(unhexint(gasPrice))
+          .mul(new BN(unprefixHex(gas), 16))
+          .add(new BN(unprefixHex(value), 16))
+
+        if (priceInWei.cmp(maxPriceInWei) > 0) {
+          return cb(new Error(`too expensive: ${priceInWei.toString()} wei`))
+        }
+
+        return signTransaction.apply(walletProvider, args)
+      }
+    }
+
+    engine.addProvider(walletProvider)
     // id mgmt
     const idmgmtSubprovider = new HookedWalletSubprovider({
       // accounts
@@ -438,6 +457,8 @@ function wrapCB (cb) {
 }
 
 function unhexint (val) {
+  if (typeof val === 'number') return val
+
   if (Buffer.isBuffer(val)) {
     return ethUtil.bufferToInt(val)
   }
@@ -465,4 +486,15 @@ function flatten (arr) {
 
 function getWallet ({ privateKey, wallet }) {
   return wallet || Wallet.fromPrivateKey(privateKey)
+}
+
+function pickNonNull (obj) {
+  const nonNull = {}
+  for (let key in obj) {
+    if (obj[key] != null) {
+      nonNull[key] = obj[key]
+    }
+  }
+
+  return nonNull
 }

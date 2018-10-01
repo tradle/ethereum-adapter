@@ -17,7 +17,6 @@
     "eth-tx-finder": "github:mvayngrib/eth-tx-finder",
     "ethereumjs-util": "^5.1.1",
     "ethereumjs-wallet": "mvayngrib/ethereumjs-wallet",
-    "lexicographic-integer": "^1.1.0",
     "object.omit": "^2.0.1",
     "request": "^2.81.0",
     "web3-provider-engine": "github:mvayngrib/provider-engine",
@@ -27,6 +26,9 @@
   "devDependencies": {
     "eslint": "^3.19.0",
     "ethereumjs-testrpc": "^3.0.3"
+  },
+  "peerDepedencies": {
+    "bn.js": ">=4"
   },
   "browser": {
     "request": false
