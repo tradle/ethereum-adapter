@@ -37,7 +37,7 @@ const gasPriceByPriority = {
   top: hexint(40 * GWEI), // 40 gwei
 }
 
-const MIN_GAS_LIMIT = 21000
+const GAS_LIMIT = 21000
 
 module.exports = {
   networks,
@@ -259,8 +259,8 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
     to,
     data,
     gas,
-    gasLimit=MIN_GAS_LIMIT,
-    gasPrice,//=gasPriceByPriority.mediumHigh,
+    gasLimit=GAS_LIMIT,
+    gasPrice=gasPriceByPriority.mediumLow,
   }, cb) {
     // if not started
     engine.start()
@@ -269,12 +269,7 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
       return process.nextTick(() => cb(new Error('only one recipient allowed')))
     }
 
-    to = to.map(({ address, amount }) => {
-      return {
-        address: prefixHex(address),
-        amount
-      }
-    })[0]
+    to = to.map(normalizeTo)
 
     debug('sending transaction')
     const params = pickNonNull({
@@ -282,7 +277,7 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
       gasLimit,
       gasPrice,
       from: wallet.getAddressString(),
-      to: to.address,
+      to: to[0].address,
       value: '0x0', //prefixHex(to.amount.toString(16)),
       // EIP 155 chainId - mainnet: 1, ropsten: 3, rinkeby: 54
       chainId: network.constants.chainId,
@@ -293,7 +288,20 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
       method: 'eth_sendTransaction',
       params: [params]
     }), wrapCB(function (err, txId) {
-      if (err) return cb(err)
+      if (err) {
+        if (isUnderpricedError(err)) {
+          debug('attempting with 10% price increase')
+          return signAndSend({
+            to,
+            data,
+            gas,
+            gasLimit,
+            gasPrice: gasPrice * 1.101, // 1.1 + an extra .001 for floating point math nonsense
+          }, cb)
+        }
+
+        return cb(err)
+      }
 
       cb(null, { txId })
     }))
@@ -378,7 +386,7 @@ function createEngine (opts) {
           .add(new BN(unprefixHex(value), 16))
 
         if (priceInWei.cmp(maxPriceInWei) > 0) {
-          return cb(new Error(`too expensive: ${priceInWei.toString()} wei`))
+          return cb(new Error(`aborting, too expensive: ${priceInWei.toString()} wei`))
         }
 
         return signTransaction.apply(walletProvider, args)
@@ -497,4 +505,15 @@ function pickNonNull (obj) {
   }
 
   return nonNull
+}
+
+function isUnderpricedError (err) {
+  return /underpriced/i.test(err.message)
+}
+
+function normalizeTo ({ address, amount }) {
+  return {
+    address: prefixHex(address),
+    amount
+  }
 }
