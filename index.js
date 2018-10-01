@@ -25,14 +25,16 @@ const networks = require('./networks')
 const MAX_CONCURRENT_REQUESTS = 3
 const ENGINE_READY_MAP = new WeakMap()
 // see https://www.myetherwallet.com/helpers.html
-const WEI = 1000000000
+const GWEI = 1000000000
 const gasPriceByPriority = {
   // aim for next few minutes
-  low: hexint(2 * WEI), // 2 gwei
+  low: hexint(2 * GWEI), // 2 gwei
+  mediumLow: hexint(5 * GWEI), // 5 gwei
+  mediumHigh: hexint(10 * GWEI), // 10 gwei
   // aim for next few blocks
-  high: hexint(20 * WEI), // 20 gwei
+  high: hexint(20 * GWEI), // 20 gwei
   // aim for next block
-  top: hexint(40 * WEI), // 40 gwei
+  top: hexint(40 * GWEI), // 40 gwei
 }
 
 const MIN_GAS_LIMIT = 21000
@@ -256,8 +258,9 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
   function signAndSend ({
     to,
     data,
+    gas=MIN_GAS_LIMIT,
     gasLimit=MIN_GAS_LIMIT,
-    gasPrice=gasPriceByPriority.low
+    gasPrice=gasPriceByPriority.mediumHigh,
   }, cb) {
     // if not started
     engine.start()
@@ -275,7 +278,8 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
 
     debug('sending transaction')
     const params = {
-      gasLimit, // 21000 is min?
+      gas,
+      gasLimit,
       gasPrice,
       from: wallet.getAddressString(),
       to: to.address,
