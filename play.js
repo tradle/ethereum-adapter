@@ -46,17 +46,12 @@ const pub = Wallet.fromPrivateKey(privateKeys[1]).getPublicKey()
 function sendTx (cb) {
   transactor.send({
     to: [{ address: addresses[1], amount: 1 }]
-  }, function (err) {
-    if (err) throw err
-
-    cb()
   })
 }
 
 function checkTxs () {
-  blockchain.addresses.transactions(addresses, function (err, result) {
-    console.log(JSON.stringify(result, null, 2))
-  })
+  blockchain.addresses.transactions(addresses)
+    .then(result => console.log(JSON.stringify(result, null, 2)))
 }
 
 sendTx(checkTxs)

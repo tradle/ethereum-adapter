@@ -1,9 +1,9 @@
 const { EventEmitter } = require('events')
-const { mapLimit } = require('async')
 const extend = require('xtend/mutable')
-const omit = require('object.omit')
 const debug = require('debug')('@tradle/ethereum-adapter')
 const BN = require('bn.js')
+const Promise = require('bluebird')
+const pMemoize = require('p-memoize')
 const ProviderEngine = require('web3-provider-engine')
 const DefaultFixture = require('web3-provider-engine/subproviders/default-fixture.js')
 const NonceTrackerSubprovider = require('web3-provider-engine/subproviders/nonce-tracker.js')
@@ -20,12 +20,24 @@ const Wallet = require('ethereumjs-wallet')
 const WalletSubprovider = require('ethereumjs-wallet/provider-engine')
 const ethUtil = require('ethereumjs-util')
 const TxListSubprovider = require('./txlist-provider')
+const { getSend, flatten, promisify } = require('./utils')
 const networks = require('./networks')
 
 const MAX_CONCURRENT_REQUESTS = 3
 const ENGINE_READY_MAP = new WeakMap()
 // see https://www.myetherwallet.com/helpers.html
 const GWEI = 1000000000
+const hexint = n => ethUtil.intToHex(n)
+const unhexint = val => {
+  if (typeof val === 'number') return val
+
+  if (Buffer.isBuffer(val)) {
+    return ethUtil.bufferToInt(val)
+  }
+
+  return parseInt(unprefixHex(val), 16)
+}
+
 const gasPriceByPriority = {
   // aim for next few minutes
   low: hexint(2 * GWEI), // 2 gwei
@@ -37,30 +49,20 @@ const gasPriceByPriority = {
   top: hexint(40 * GWEI), // 40 gwei
 }
 
-const GAS_LIMIT = 21000
+const GAS_FOR_TRANSFER = 21000
 
-module.exports = {
-  networks,
-  createNetwork,
-  createEngine,
-  createTransactor,
-  createBlockchainAPI,
-  gasPriceByPriority
+
+const promiseEngineReady = engine => {
+  const ctx = this
+  const ready = ENGINE_READY_MAP.get(engine)
+  return new Promise((resolve, reject) => {
+    if (ready) return resolve()
+
+    engine.once('block', () => resolve())
+  })
 }
 
-function requireReady (engine, fn) {
-  return function () {
-    const args = arguments
-    const ready = ENGINE_READY_MAP.get(engine)
-    if (ready) return fn.apply(this, args)
-
-    engine.once('block', () => {
-      fn.apply(this, args)
-    })
-  }
-}
-
-function createNetwork ({ networkName, constants, engineOpts }) {
+const createNetwork = ({ networkName, constants, engineOpts }) => {
   let api
   let engine
 
@@ -99,27 +101,11 @@ function createNetwork ({ networkName, constants, engineOpts }) {
   return network
 }
 
-function createBlockchainAPI ({ network, engine }) {
-  const stop = engine.stop.bind(engine)
-  const blockchain = extend(new EventEmitter(), {
-    network,
-    close: stop,
-    stop: stop,
-    start: engine.start.bind(engine),
-    info: requireReady(engine, getLatestBlock),
-    blocks: {
-      latest: requireReady(engine, getLatestBlock)
-    },
-    transactions: {
-      get: requireReady(engine, getTxs),
-      propagate: requireReady(engine, sendRawTx)
-    },
-    addresses: {
-      transactions: requireReady(engine, getTxsForAccounts),
-      balance: requireReady(engine, getBalance.bind(null, engine))
-    }
-  })
-
+const createBlockchainAPI = ({ network, engine }) => {
+  const ready = promiseEngineReady(engine)
+  const stop = promisify(engine.stop.bind(engine))
+  const start = promisify(engine.start.bind(engine))
+  const send = getSend(engine)
   let blockHeight
 
   engine.on('block', ({ number }) => {
@@ -127,154 +113,155 @@ function createBlockchainAPI ({ network, engine }) {
     blockchain.emit('block', { blockHeight })
   })
 
-  return blockchain
+  const requireReady = fn => (...args) => ready.then(() => fn(...args))
+  const getLatestBlock = () => Promise.resolve({ blockHeight })
+  const getTxs = hashes => Promise.map(hashes, getTx, { concurrency: MAX_CONCURRENT_REQUESTS })
+  const getTx = async hash => send(createPayload({
+    method: 'eth_getTransactionByHash',
+    params: [prefixHex(hash)],
+  }))
 
-  function send (payload, cb) {
-    return engine.sendAsync(payload, wrapCB(cb))
-  }
+  const sendRawTx = async (txHex) => send(createPayload({
+    method: 'eth_sendRawTransaction',
+    params: [txHex],
+  }))
 
-  function getLatestBlock (cb) {
-    process.nextTick(() => cb(null, { blockHeight }))
-  }
-
-  function getTxs (hashes, cb) {
-    mapLimit(hashes, MAX_CONCURRENT_REQUESTS, getTx, cb)
-  }
-
-  function getTx (hash, cb) {
-    send(createPayload({
-      method: 'eth_getTransactionByHash',
-      params: [prefixHex(hash)],
-    }), cb)
-  }
-
-  function sendRawTx (txHex, cb) {
-    send(createPayload({
-      method: 'eth_sendRawTransaction',
-      params: [txHex],
-    }), cb)
-  }
-
-  function getTxsForAccounts (addresses, height, cb) {
-    if (typeof height === 'function') {
-      cb = height
-      height = undefined
-    }
-
-    if (height && height > blockHeight) return cb(null, [])
+  const getTxsForAccounts = async (addresses, height) => {
+    if (height && height > blockHeight) return []
 
     addresses = addresses.filter(address => {
       if (!address) {
+        // eslint-disable-next-line no-console
         console.warn('undefined address passed in')
       }
 
       return address
     })
 
-    mapLimit(addresses, MAX_CONCURRENT_REQUESTS, function (address, done) {
-      getTxsForAccount(address, height, done)
-    }, function (err, results) {
-      if (err) return cb(err)
-
-      cb(null, flatten(results))
-    })
+    const results = await Promise.map(addresses, address => getTxsForAccount(address, height), { concurrency: MAX_CONCURRENT_REQUESTS })
+    return flatten(results)
   }
 
-  function getTxsForAccount (addressHex, height, cb) {
-    send(createPayload({
-      method: 'eth_listTransactions',
-      params: [
-        prefixHex(addressHex),
-        height,
-        undefined, // blockHeight,
-        'asc'
-      ],
-    }), function (err, result) {
-      if (err) {
-        if (/no transactions/i.test(err.message)) {
-          debug(`no transactions found for address ${addressHex}`)
-          return cb(null, [])
-        }
-
-        return cb(err)
+  const getTxsForAccount = async (addressHex, height) => {
+    let result
+    try {
+      result = await send(createPayload({
+        method: 'eth_listTransactions',
+        params: [
+          prefixHex(addressHex),
+          height,
+          undefined, // blockHeight,
+          'asc'
+        ],
+      }))
+    } catch (err) {
+      if (/no transactions/i.test(err.message)) {
+        debug(`no transactions found for address ${addressHex}`)
+        return []
       }
 
-      // Etherscan.io
-      //
-      // { result: [{ blockNumber: '1961866',
-      //        timeStamp: '1469624867',
-      //        hash: '0x545243f19ede50b8115e6165ffe509fde4bb1abc20f287cd8c49c97f39836efe',
-      //        nonce: '22',
-      //        blockHash: '0x9ba94fe0b81b32593fd547c39ccbbc2fc14b1bdde4ccc6dccb79e2a304280d50',
-      //        transactionIndex: '5',
-      //        from: '0xddbd2b932c763ba5b1b7ae3b362eac3e8d40121a',
-      //        to: '0x1bb0ac60363e320bc45fdb15aed226fb59c88e44',
-      //        value: '10600000000000000000000',
-      //        gas: '127964',
-      //        gasPrice: '20000000000',
-      //        isError: '0',
-      //        input: '0x',
-      //        contractAddress: '',
-      //        cumulativeGasUsed: '227901',
-      //        gasUsed: '27964',
-      //        confirmations: '1356689' }]}
+      throw err
+    }
 
-      result = result.map(txInfo => {
-        const height = Number(txInfo.blockNumber)
-        blockHeight = Math.max(blockHeight, height)
-        return {
-          blockHeight,
-          txId: unprefixHex(txInfo.hash),
-          confirmations: blockHeight - height,
-          from: {
-            addresses: [txInfo.from].map(unprefixHex)
-          },
-          to: {
-            addresses: [txInfo.to].map(unprefixHex)
-          },
-          data: unprefixHex(txInfo.input || '')
-        }
-      })
+    // Etherscan.io
+    //
+    // { result: [{ blockNumber: '1961866',
+    //        timeStamp: '1469624867',
+    //        hash: '0x545243f19ede50b8115e6165ffe509fde4bb1abc20f287cd8c49c97f39836efe',
+    //        nonce: '22',
+    //        blockHash: '0x9ba94fe0b81b32593fd547c39ccbbc2fc14b1bdde4ccc6dccb79e2a304280d50',
+    //        transactionIndex: '5',
+    //        from: '0xddbd2b932c763ba5b1b7ae3b362eac3e8d40121a',
+    //        to: '0x1bb0ac60363e320bc45fdb15aed226fb59c88e44',
+    //        value: '10600000000000000000000',
+    //        gas: '127964',
+    //        gasPrice: '20000000000',
+    //        isError: '0',
+    //        input: '0x',
+    //        contractAddress: '',
+    //        cumulativeGasUsed: '227901',
+    //        gasUsed: '27964',
+    //        confirmations: '1356689' }]}
 
-      cb(null, result)
+    result = result.map(txInfo => {
+      const height = Number(txInfo.blockNumber)
+      blockHeight = Math.max(blockHeight, height)
+      return {
+        blockHeight,
+        txId: unprefixHex(txInfo.hash),
+        confirmations: blockHeight - height,
+        from: {
+          addresses: [txInfo.from].map(unprefixHex)
+        },
+        to: {
+          addresses: [txInfo.to].map(unprefixHex)
+        },
+        data: unprefixHex(txInfo.input || '')
+      }
     })
+
+    return result
   }
+
+  const blockchain = extend(new EventEmitter(), {
+    network,
+    close: stop,
+    stop,
+    start,
+    info: requireReady(getLatestBlock),
+    blocks: {
+      latest: requireReady(getLatestBlock)
+    },
+    transactions: {
+      get: requireReady(getTxs),
+      propagate: requireReady(sendRawTx)
+    },
+    addresses: {
+      transactions: requireReady(getTxsForAccounts),
+      balance: requireReady(getBalance.bind(null, engine))
+    }
+  })
+
+  return blockchain
 }
 
-function getBalance (engine, address, cb) {
-  engine.sendAsync(createPayload({
+const getBalance = async (engine, address) => {
+  const send = getSend(engine)
+  // balance in wei
+  return await send(createPayload({
     method: 'eth_getBalance',
     params: [prefixHex(address), 'latest']
-  }), function (err, res) {
-    if (err) return cb(err)
-
-    // balance in wei
-    cb(null, res.result)
-  })
+  }))
 }
 
-function createTransactor ({ network, engine, wallet, privateKey }) {
+const createTransactor = ({ network, engine, wallet, privateKey }) => {
+  const send = getSend(engine)
+  const getGasPrice = pMemoize(() => send(createPayload({
+    method: 'eth_gasPrice',
+    params: [],
+  })), { maxAge: 60000 })
 
-  function signAndSend ({
+  const signAndSend = async ({
     to,
     data,
-    gas,
-    gasLimit=GAS_LIMIT,
-    gasPrice=gasPriceByPriority.mediumLow,
-  }, cb) {
+    gasPrice,
+    // gasPrice=gasPriceByPriority.mediumLow,
+  }) => {
     // if not started
     engine.start()
 
     if (to.length !== 1) {
-      return process.nextTick(() => cb(new Error('only one recipient allowed')))
+      throw new Error('only one recipient allowed')
     }
 
     to = to.map(normalizeTo)
 
     debug('sending transaction')
+    if (!gasPrice) gasPrice = await getGasPrice()
+
     const params = pickNonNull({
-      gas,
-      gasLimit,
+      gas: GAS_FOR_TRANSFER,
+      gasLimit: GAS_FOR_TRANSFER,
       gasPrice,
       from: wallet.getAddressString(),
       to: to[0].address,
@@ -284,27 +271,27 @@ function createTransactor ({ network, engine, wallet, privateKey }) {
       data,
     })
 
-    engine.sendAsync(createPayload({
+    const payload = createPayload({
       method: 'eth_sendTransaction',
       params: [params]
-    }), wrapCB(function (err, txId) {
-      if (err) {
-        if (isUnderpricedError(err)) {
-          debug('attempting with 10% price increase')
-          return signAndSend({
-            to,
-            data,
-            gas,
-            gasLimit,
-            gasPrice: gasPrice * 1.101, // 1.1 + an extra .001 for floating point math nonsense
-          }, cb)
-        }
+    })
 
-        return cb(err)
+    try {
+      return {
+        txId: await send(payload)
+      }
+    } catch (err) {
+      if (isUnderpricedError(err)) {
+        debug('attempting with 10% price increase')
+        return signAndSend({
+          to,
+          data,
+          gasPrice: gasPrice * 1.101, // 1.1 + an extra .001 for floating point math nonsense
+        })
       }
 
-      cb(null, { txId })
-    }))
+      throw err
+    }
   }
 
   wallet = getWallet({ wallet, privateKey })
@@ -376,20 +363,20 @@ function createEngine (opts) {
     if (maxPriceInWei) {
       maxPriceInWei = new BN(maxPriceInWei)
       const { signTransaction } = walletProvider
-      walletProvider.signTransaction = (...args) => {
-        const { gasPrice, gas, value } = args[0]
+      walletProvider.signTransaction = (txData, cb) => {
+        const { gasPrice, gas, value } = txData
         // gas: "0x5208"
         // gasPrice: 19900000000
         // value: "0x1"
         const priceInWei = new BN(unhexint(gasPrice))
-          .mul(new BN(unprefixHex(gas), 16))
-          .add(new BN(unprefixHex(value), 16))
+          .mul(new BN(unhexint(gas)))
+          .add(new BN(unprefixHex(value)))
 
         if (priceInWei.cmp(maxPriceInWei) > 0) {
           return cb(new Error(`aborting, too expensive: ${priceInWei.toString()} wei`))
         }
 
-        return signTransaction.apply(walletProvider, args)
+        return signTransaction.call(walletProvider, txData, cb)
       }
     }
 
@@ -423,7 +410,10 @@ function createEngine (opts) {
 
   // data sources
   if (rpcUrl) {
-    engine.addProvider(new TxListSubprovider({ rpcUrl }))
+    if (!opts.etherscan) {
+      engine.addProvider(new TxListSubprovider({ rpcUrl }))
+    }
+
     engine.addProvider(new RpcSubprovider({ rpcUrl }))
   }
 
@@ -443,60 +433,11 @@ function createEngine (opts) {
   return engine
 }
 
-function normalizeError (err, response) {
-  if (response && response.error) {
-    err = response.error
-  }
+const unprefixHex = hex => hex.indexOf('0x') === 0 ? hex.slice(2) : hex
+const prefixHex = hex => hex.indexOf('0x') === 0 ? hex : '0x' + hex
+const getWallet = ({ privateKey, wallet }) => wallet || Wallet.fromPrivateKey(privateKey)
 
-  if (!(err instanceof Error)) {
-    if (typeof err === 'object') err = JSON.stringify(err)
-    if (typeof err === 'string') err = new Error(err)
-  }
-
-  return err
-}
-
-function wrapCB (cb) {
-  return function (err, response) {
-    if (err) return cb(normalizeError(err, response))
-
-    cb(null, response.result)
-  }
-}
-
-function unhexint (val) {
-  if (typeof val === 'number') return val
-
-  if (Buffer.isBuffer(val)) {
-    return ethUtil.bufferToInt(val)
-  }
-
-  return parseInt(unprefixHex(val), 16)
-}
-
-function hexint (n) {
-  return ethUtil.intToHex(n)
-}
-
-function unprefixHex (hex) {
-  return hex.indexOf('0x') === 0 ? hex.slice(2) : hex
-}
-
-function prefixHex (hex) {
-  return hex.indexOf('0x') === 0 ? hex : '0x' + hex
-}
-
-function flatten (arr) {
-  return arr.reduce(function (all, some) {
-    return all.concat(some)
-  }, [])
-}
-
-function getWallet ({ privateKey, wallet }) {
-  return wallet || Wallet.fromPrivateKey(privateKey)
-}
-
-function pickNonNull (obj) {
+const pickNonNull = obj => {
   const nonNull = {}
   for (let key in obj) {
     if (obj[key] != null) {
@@ -507,13 +448,17 @@ function pickNonNull (obj) {
   return nonNull
 }
 
-function isUnderpricedError (err) {
-  return /underpriced/i.test(err.message)
-}
+const isUnderpricedError = err => /underpriced/i.test(err.message)
+const normalizeTo = ({ address, amount }) => ({
+  address: prefixHex(address),
+  amount
+})
 
-function normalizeTo ({ address, amount }) {
-  return {
-    address: prefixHex(address),
-    amount
-  }
+module.exports = {
+  networks,
+  createNetwork,
+  createEngine,
+  createTransactor,
+  createBlockchainAPI,
+  gasPriceByPriority
 }

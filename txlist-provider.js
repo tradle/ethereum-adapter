@@ -1,17 +1,16 @@
 
 const { inherits } = require('util')
-const async = require('async')
 const xhr = process.browser ? require('xhr') : require('request')
 const EthQuery = require('eth-store/query')
-const {
-  findAllTxs,
-  findAllTxsTo,
-  findAllTxsInRange,
-  findAllTxsInRangeTo
-} = require('eth-tx-finder')
+const TxFinder = require('eth-tx-finder')
+const { promisify, flatten } = require('./utils')
+const findAllTxs = promisify(TxFinder.findAllTxs)
+const findAllTxsTo = promisify(TxFinder.findAllTxsTo)
+const findAllTxsInRange = promisify(TxFinder.findAllTxsInRange)
+const findAllTxsInRangeTo = promisify(TxFinder.findAllTxsInRangeTo)
+const Subprovider = require('web3-provider-engine/subproviders/subprovider')
 
 const noop = function () {}
-const Subprovider = require('web3-provider-engine/subproviders/subprovider')
 
 inherits(TxListProvider, Subprovider)
 module.exports = TxListProvider
@@ -39,55 +38,45 @@ TxListProvider.prototype.handleRequest = function (payload, next, end) {
   }
 }
 
-function flatten (arr) {
-  return arr.reduce(function (all, some) {
-    return all.concat(some)
-  }, [])
+const listTransactions = async ({ address, startblock=0, endblock=Infinity, rpcUrl }) => {
+  const results = Promise.all([
+    findTxsFrom({ address, startblock, endblock, rpcUrl }),
+    findTxsTo({ address, startblock, endblock, rpcUrl })
+  ])
+
+  return flatten(results)
 }
 
-function listTransactions ({ address, startblock=0, endblock=Infinity, rpcUrl }, cb) {
-  async.parallel([
-    done => findTxsFrom({ address, startblock, endblock, rpcUrl }, done),
-    done => findTxsTo({ address, startblock, endblock, rpcUrl }, done)
-  ], function (err, results) {
-    if (err) return cb(err)
-
-    cb(null, flatten(results))
-  })
-}
-
-function findTxsTo ({ address, startblock, endblock, rpcUrl }, cb) {
+const findTxsTo = ({ address, startblock, endblock, rpcUrl }) => {
   const provider = {
     sendAsync: sendAsync.bind(null, rpcUrl)
   }
 
-  let foundTxCount = 0
   if (startblock === 0 && endblock === Infinity) {
-    return findAllTxsTo(provider, address, noop, cb)
+    return findAllTxsTo(provider, address, noop)
   }
 
-  findAllTxsInRangeTo(provider, address, startblock, endblock, noop, cb)
+  return findAllTxsInRangeTo(provider, address, startblock, endblock, noop)
 }
 
-function findTxsFrom ({ address, startblock, endblock, rpcUrl }, cb) {
+const findTxsFrom = async ({ address, startblock, endblock, rpcUrl }) => {
   const provider = {
     sendAsync: sendAsync.bind(null, rpcUrl)
   }
 
-  let foundTxCount = 0
   if (startblock === 0 && endblock === Infinity) {
-    return findAllTxs(provider, address, noop, cb)
+    return findAllTxs(provider, address, noop)
   }
 
   const query = new EthQuery(provider)
-  async.parallel({
-    earliest: query.getNonce.bind(query, address, startblock),
-    latest:   query.getNonce.bind(query, address, endblock),
-  }, function (err, results) {
-    if (err) return cb(err)
 
-    findAllTxsInRange(provider, address, startblock, endblock, noop, cb)
-  })
+  // FIXME: can't remember the point of this or how it works
+  const [earliest, latest] = await Promise.all([
+    promisify(query.getNonce).bind(query, address, startblock),
+    promisify(query.getNonce).bind(query, address, endblock),
+  ])
+
+  return findAllTxsInRange(provider, address, startblock, endblock, noop)
 }
 
 function sendAsync (rpcUrl, payload, cb) {
@@ -102,7 +91,7 @@ function sendAsync (rpcUrl, payload, cb) {
     rejectUnauthorized: false,
   }
 
-  const req = xhr(requestParams, function(err, res, body) {
+  xhr(requestParams, function(err, res, body) {
     if (err) return cb(err)
 
     // parse response
@@ -121,10 +110,4 @@ function sendAsync (rpcUrl, payload, cb) {
     // console.log('network:', payload.method, payload.params, '->', data.result)
     cb(null, data)
   })
-}
-
-// util
-
-function hexToNumber(hexString){
-  return parseInt(hexString, 16)
 }
