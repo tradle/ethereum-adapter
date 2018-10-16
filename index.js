@@ -420,6 +420,7 @@ function createEngine (opts) {
   if (opts.etherscan) {
     let etherscanOpts = typeof opts.etherscan === 'boolean' ? {} : opts.etherscan
     etherscanOpts = clone(etherscanOpts, {
+      https: true,
       network: opts.networkName,
     })
 
