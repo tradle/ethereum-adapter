@@ -1,5 +1,6 @@
 const { EventEmitter } = require('events')
 const extend = require('xtend/mutable')
+const clone = require('xtend')
 const debug = require('debug')('@tradle/ethereum-adapter')
 const BN = require('bn.js')
 const Promise = require('bluebird')
@@ -53,9 +54,8 @@ const GAS_FOR_TRANSFER = 21000
 
 
 const promiseEngineReady = engine => {
-  const ctx = this
   const ready = ENGINE_READY_MAP.get(engine)
-  return new Promise((resolve, reject) => {
+  return new Promise(resolve => {
     if (ready) return resolve()
 
     engine.once('block', () => resolve())
@@ -418,7 +418,12 @@ function createEngine (opts) {
   }
 
   if (opts.etherscan) {
-    engine.addProvider(new EtherscanSubprovider({ network: opts.networkName }))
+    let etherscanOpts = typeof opts.etherscan === 'boolean' ? {} : opts.etherscan
+    etherscanOpts = clone(etherscanOpts, {
+      network: opts.networkName,
+    })
+
+    engine.addProvider(new EtherscanSubprovider(etherscanOpts))
   }
 
   if (opts.autostart !== false) {
