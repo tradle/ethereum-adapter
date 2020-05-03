@@ -99,6 +99,30 @@ function createNetwork ({ networkName, constants, engineOpts }) {
   return network
 }
 
+function parseTxInfo(txInfo) {
+  if (!txInfo) return txInfo
+
+  const { blockNumber, hash, from, to, input } = txInfo
+  let txBlockHeight = blockNumber
+  if (typeof blockNumber === 'string') {
+    txBlockHeight = blockNumber.startsWith('0x')
+      ? parseInt(unprefixHex(blockNumber), 16)
+      : parseInt(blockNumber, 10)
+  }
+
+  return {
+    blockHeight: txBlockHeight,
+    txId: unprefixHex(hash),
+    from: {
+      addresses: [from].map(unprefixHex)
+    },
+    to: {
+      addresses: [to].map(unprefixHex)
+    },
+    data: unprefixHex(input || '')
+  }
+}
+
 function createBlockchainAPI ({ network, engine }) {
   const stop = engine.stop.bind(engine)
   const blockchain = extend(new EventEmitter(), {
@@ -145,7 +169,11 @@ function createBlockchainAPI ({ network, engine }) {
     send(createPayload({
       method: 'eth_getTransactionByHash',
       params: [prefixHex(hash)],
-    }), cb)
+    }), (err, tx) => {
+      if (err || !tx) return cb(err, tx)
+
+      cb(null, parseTxInfo(tx))
+    })
   }
 
   function sendRawTx (txHex, cb) {
@@ -219,22 +247,12 @@ function createBlockchainAPI ({ network, engine }) {
       //        gasUsed: '27964',
       //        confirmations: '1356689' }]}
 
-      result = result.map(txInfo => {
-        const height = Number(txInfo.blockNumber)
-        blockHeight = Math.max(blockHeight, height)
-        return {
-          blockHeight,
-          txId: unprefixHex(txInfo.hash),
-          confirmations: blockHeight - height,
-          from: {
-            addresses: [txInfo.from].map(unprefixHex)
-          },
-          to: {
-            addresses: [txInfo.to].map(unprefixHex)
-          },
-          data: unprefixHex(txInfo.input || '')
-        }
-      })
+      result = result
+        .map(parseTxInfo)
+        .map(tx => ({
+          ...tx,
+          confirmations: height ? tx.blockHeight - height : undefined,
+        }))
 
       cb(null, result)
     })
