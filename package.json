@@ -1,6 +1,6 @@
 {
   "name": "@tradle/ethereum-adapter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "index.js",
   "license": "MIT",
   "repository": {
@@ -11,14 +11,14 @@
     "lint": "eslint --quiet --ignore-path .gitignore ."
   },
   "dependencies": {
+    "@tradle/eth-store": "^2.2.1",
+    "@tradle/eth-tx-finder": "^1.0.1",
+    "@tradle/ethereumjs-wallet": "^0.6.0",
+    "@tradle/web3-provider-engine": "^13.2.9",
     "debug": "^3.0.1",
-    "eth-store": "^2.2.0",
-    "eth-tx-finder": "github:mvayngrib/eth-tx-finder",
     "ethereumjs-util": "^5.1.1",
-    "ethereumjs-wallet": "mvayngrib/ethereumjs-wallet",
     "p-memoize": "^2.1.0",
     "request": "^2.81.0",
-    "web3-provider-engine": "github:mvayngrib/provider-engine",
     "xhr": "^2.4.0",
     "xtend": "^4.0.1"
   },

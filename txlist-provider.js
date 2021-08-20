@@ -1,14 +1,14 @@
 
 const { inherits } = require('util')
 const xhr = process.browser ? require('xhr') : require('request')
-const EthQuery = require('eth-store/query')
-const TxFinder = require('eth-tx-finder')
+const EthQuery = require('@tradle/eth-store/query')
+const TxFinder = require('@tradle/eth-tx-finder')
 const { promisify, flatten } = require('./utils')
 const findAllTxs = promisify(TxFinder.findAllTxs)
 const findAllTxsTo = promisify(TxFinder.findAllTxsTo)
 const findAllTxsInRange = promisify(TxFinder.findAllTxsInRange)
 const findAllTxsInRangeTo = promisify(TxFinder.findAllTxsInRangeTo)
-const Subprovider = require('web3-provider-engine/subproviders/subprovider')
+const Subprovider = require('@tradle/web3-provider-engine/subproviders/subprovider')
 
 const noop = function () {}
 

@@ -1,4 +1,4 @@
-const Wallet = require('ethereumjs-wallet')
+const Wallet = require('@tradle/ethereumjs-wallet')
 const TestRPC = require('ethereumjs-testrpc')
 // web3.setProvider(TestRPC.provider())
 
