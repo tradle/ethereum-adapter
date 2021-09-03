@@ -14,7 +14,7 @@
     "@tradle/eth-store": "^2.2.1",
     "@tradle/eth-tx-finder": "^1.0.1",
     "@tradle/ethereumjs-wallet": "^0.6.0",
-    "@tradle/web3-provider-engine": "^13.2.9",
+    "@tradle/web3-provider-engine": "^14.0.0",
     "debug": "^3.0.1",
     "ethereumjs-util": "^5.1.1",
     "p-memoize": "^2.1.0",
