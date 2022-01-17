@@ -26,5 +26,5 @@ const flatten = arr => arr.reduce((all, some) => all.concat(some), [])
 module.exports = {
   getSend,
   promisify,
-  flatten,
+  flatten
 }

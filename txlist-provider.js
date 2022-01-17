@@ -38,7 +38,7 @@ TxListProvider.prototype.handleRequest = function (payload, next, end) {
   }
 }
 
-const listTransactions = async ({ address, startblock=0, endblock=Infinity, rpcUrl }) => {
+const listTransactions = async ({ address, startblock = 0, endblock = Infinity, rpcUrl }) => {
   const results = Promise.all([
     findTxsFrom({ address, startblock, endblock, rpcUrl }),
     findTxsTo({ address, startblock, endblock, rpcUrl })
@@ -71,9 +71,9 @@ const findTxsFrom = async ({ address, startblock, endblock, rpcUrl }) => {
   const query = new EthQuery(provider)
 
   // FIXME: can't remember the point of this or how it works
-  const [earliest, latest] = await Promise.all([
+  await Promise.all([
     promisify(query.getNonce).bind(query, address, startblock),
-    promisify(query.getNonce).bind(query, address, endblock),
+    promisify(query.getNonce).bind(query, address, endblock)
   ])
 
   return findAllTxsInRange(provider, address, startblock, endblock, noop)
@@ -84,14 +84,14 @@ function sendAsync (rpcUrl, payload, cb) {
     uri: rpcUrl,
     method: 'POST',
     headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify(payload),
-    rejectUnauthorized: false,
+    rejectUnauthorized: false
   }
 
-  xhr(requestParams, function(err, res, body) {
+  xhr(requestParams, function (err, res, body) {
     if (err) return cb(err)
 
     // parse response

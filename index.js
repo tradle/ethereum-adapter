@@ -47,11 +47,10 @@ const gasPriceByPriority = {
   // aim for next few blocks
   high: hexint(20 * GWEI), // 20 gwei
   // aim for next block
-  top: hexint(40 * GWEI), // 40 gwei
+  top: hexint(40 * GWEI) // 40 gwei
 }
 
 const GAS_FOR_TRANSFER = 21000
-
 
 const promiseEngineReady = engine => {
   const ready = ENGINE_READY_MAP.get(engine)
@@ -74,25 +73,25 @@ const createNetwork = ({ networkName, constants, engineOpts }) => {
     curve: 'secp256k1',
     pubKeyToAddress,
     generateKey,
-    get api() {
+    get api () {
       if (!api) {
         api = network.createBlockchainAPI({ engine: network.engine })
       }
 
       return api
     },
-    get engine() {
+    get engine () {
       if (!engine) {
         engine = createEngine(engineOpts)
       }
 
       return engine
     },
-    createTransactor: (opts={}) => createTransactor(extend({
+    createTransactor: (opts = {}) => createTransactor(extend({
       network,
       engine: network.engine
     }, opts)),
-    createBlockchainAPI: (opts={}) => createBlockchainAPI(extend({
+    createBlockchainAPI: (opts = {}) => createBlockchainAPI(extend({
       network,
       engine: network.engine
     }, opts))
@@ -118,12 +117,12 @@ const createBlockchainAPI = ({ network, engine }) => {
   const getTxs = hashes => Promise.map(hashes, getTx, { concurrency: MAX_CONCURRENT_REQUESTS })
   const getTx = async hash => send(createPayload({
     method: 'eth_getTransactionByHash',
-    params: [prefixHex(hash)],
+    params: [prefixHex(hash)]
   }))
 
   const sendRawTx = async (txHex) => send(createPayload({
     method: 'eth_sendRawTransaction',
-    params: [txHex],
+    params: [txHex]
   }))
 
   const getTxsForAccounts = async (addresses, height) => {
@@ -152,7 +151,7 @@ const createBlockchainAPI = ({ network, engine }) => {
           height,
           undefined, // blockHeight,
           'asc'
-        ],
+        ]
       }))
     } catch (err) {
       if (/no transactions/i.test(err.message)) {
@@ -238,13 +237,13 @@ const createTransactor = ({ network, engine, wallet, privateKey }) => {
   const send = getSend(engine)
   const getGasPrice = pMemoize(() => send(createPayload({
     method: 'eth_gasPrice',
-    params: [],
+    params: []
   })), { maxAge: 60000 })
 
   const signAndSend = async ({
     to,
     data,
-    gasPrice,
+    gasPrice
     // gasPrice=gasPriceByPriority.mediumLow,
   }) => {
     // if not started
@@ -265,10 +264,10 @@ const createTransactor = ({ network, engine, wallet, privateKey }) => {
       gasPrice,
       from: wallet.getAddressString(),
       to: to[0].address,
-      value: '0x0', //prefixHex(to.amount.toString(16)),
+      value: '0x0', // prefixHex(to.amount.toString(16)),
       // EIP 155 chainId - mainnet: 1, ropsten: 3, rinkeby: 54
       chainId: network.constants.chainId,
-      data,
+      data
     })
 
     const payload = createPayload({
@@ -286,7 +285,7 @@ const createTransactor = ({ network, engine, wallet, privateKey }) => {
         return signAndSend({
           to,
           data,
-          gasPrice: gasPrice * 1.101, // 1.1 + an extra .001 for floating point math nonsense
+          gasPrice: gasPrice * 1.101 // 1.1 + an extra .001 for floating point math nonsense
         })
       }
 
@@ -399,7 +398,7 @@ function createEngine (opts) {
       processPersonalMessage: opts.processPersonalMessage,
       approvePersonalMessage: opts.approvePersonalMessage,
       signPersonalMessage: opts.signPersonalMessage,
-      personalRecoverSigner: opts.personalRecoverSigner,
+      personalRecoverSigner: opts.personalRecoverSigner
     })
 
     engine.addProvider(idmgmtSubprovider)
@@ -421,7 +420,7 @@ function createEngine (opts) {
     let etherscanOpts = typeof opts.etherscan === 'boolean' ? {} : opts.etherscan
     etherscanOpts = clone(etherscanOpts, {
       https: true,
-      network: opts.networkName,
+      network: opts.networkName
     })
 
     engine.addProvider(new EtherscanSubprovider(etherscanOpts))
@@ -445,7 +444,7 @@ const getWallet = ({ privateKey, wallet }) => wallet || Wallet.fromPrivateKey(pr
 
 const pickNonNull = obj => {
   const nonNull = {}
-  for (let key in obj) {
+  for (const key in obj) {
     if (obj[key] != null) {
       nonNull[key] = obj[key]
     }
