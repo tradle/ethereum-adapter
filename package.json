@@ -13,7 +13,7 @@
   "dependencies": {
     "@tradle/eth-store": "^2.2.1",
     "@tradle/eth-tx-finder": "^1.0.1",
-    "@tradle/ethereumjs-wallet": "^0.6.2",
+    "@tradle/ethereumjs-wallet": "^0.7.0",
     "@tradle/web3-provider-engine": "^16.0.3",
     "debug": "^4.3.3",
     "ethereumjs-util": "^7.1.3",
