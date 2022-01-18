@@ -1,7 +1,7 @@
 const { promisify } = require('bluebird')
 
 const normalizeEngineError = (err, response) => {
-  if (response && response.error) {
+  if (!err && response && response.error) {
     err = response.error
   }
 
