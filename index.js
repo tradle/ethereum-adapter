@@ -304,23 +304,22 @@ const createTransactor = ({ network, engine, wallet, privateKey }) => {
 }
 
 function generateKey () {
-  const key = Wallet.generate(true)
-  const exported = {}
-
-  // lazy
-  Object.defineProperty(exported, 'pub', {
-    get: function () {
+  let key
+  return {
+    // lazy
+    get pub () {
+      if (key === undefined) {
+        key = Wallet.generate(true)
+      }
       return key.pubKey
-    }
-  })
-
-  Object.defineProperty(exported, 'priv', {
-    get: function () {
+    },
+    get priv () {
+      if (key === undefined) {
+        key = Wallet.generate(true)
+      }
       return key.privKey
     }
-  })
-
-  return exported
+  }
 }
 
 function pubKeyToAddress (pub) {
