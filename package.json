@@ -25,7 +25,6 @@
     "standard": "^16.0.4"
   },
   "peerDepedencies": {
-    "bn.js": ">=4",
-    "bluebird": ">=3"
+    "bn.js": ">=4"
   }
 }
