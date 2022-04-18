@@ -15,7 +15,6 @@ const SanitizingSubprovider = require('@tradle/web3-provider-engine/subproviders
 const RpcSubprovider = require('@tradle/web3-provider-engine/subproviders/rpc.js')
 const EtherscanSubprovider = require('@tradle/web3-provider-engine/subproviders/etherscan')
 const GasPriceSubprovider = require('@tradle/web3-provider-engine/subproviders/gasprice.js')
-// const VMSubprovider = require('@tradle/web3-provider-engine/subproviders/vm.js')
 const createPayload = require('@tradle/web3-provider-engine/util/create-payload')
 const Wallet = require('@tradle/ethereumjs-wallet')
 const WalletSubprovider = require('@tradle/ethereumjs-wallet/provider-engine')
@@ -405,7 +404,6 @@ function createEngine (opts) {
   }
 
   engine.addProvider(new GasPriceSubprovider())
-  // engine.addProvider(new VMSubprovider())
 
   // data sources
   if (rpcUrl) {
