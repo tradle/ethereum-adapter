@@ -1,12 +1,13 @@
 
-const xhr = process.browser ? require('xhr') : require('request')
+const { fetch } = require('cross-fetch')
 const EthQuery = require('@tradle/eth-store/query')
-const TxFinder = require('@tradle/eth-tx-finder')
-const { promisify, flatten } = require('./utils')
-const findAllTxs = promisify(TxFinder.findAllTxs)
-const findAllTxsTo = promisify(TxFinder.findAllTxsTo)
-const findAllTxsInRange = promisify(TxFinder.findAllTxsInRange)
-const findAllTxsInRangeTo = promisify(TxFinder.findAllTxsInRangeTo)
+const {
+  findAllTxs,
+  findAllTxsTo,
+  findAllTxsInRange,
+  findAllTxsInRangeTo
+} = require('@tradle/eth-tx-finder')
+const { flatten } = require('./utils')
 const Subprovider = require('@tradle/web3-provider-engine/subproviders/subprovider')
 
 const noop = function () {}
@@ -27,8 +28,10 @@ class TxListProvider extends Subprovider {
           startblock: payload.params[1],
           endblock: payload.params[2],
           rpcUrl: this.rpcUrl
-        }, end)
-
+        }).then(
+          data => end(null, data),
+          err => end(err)
+        )
         break
       default:
         next()
@@ -38,7 +41,7 @@ class TxListProvider extends Subprovider {
 }
 
 async function listTransactions ({ address, startblock = 0, endblock = Infinity, rpcUrl }) {
-  const results = Promise.all([
+  const results = await Promise.all([
     findTxsFrom({ address, startblock, endblock, rpcUrl }),
     findTxsTo({ address, startblock, endblock, rpcUrl })
   ])
@@ -48,7 +51,7 @@ async function listTransactions ({ address, startblock = 0, endblock = Infinity,
 
 function findTxsTo ({ address, startblock, endblock, rpcUrl }) {
   const provider = {
-    sendAsync: sendAsync.bind(null, rpcUrl)
+    sendPromise: payload => sendPromise(rpcUrl, payload)
   }
 
   if (startblock === 0 && endblock === Infinity) {
@@ -60,7 +63,7 @@ function findTxsTo ({ address, startblock, endblock, rpcUrl }) {
 
 async function findTxsFrom ({ address, startblock, endblock, rpcUrl }) {
   const provider = {
-    sendAsync: sendAsync.bind(null, rpcUrl)
+    sendPromise: payload => sendPromise(rpcUrl, payload)
   }
 
   if (startblock === 0 && endblock === Infinity) {
@@ -71,42 +74,32 @@ async function findTxsFrom ({ address, startblock, endblock, rpcUrl }) {
 
   // FIXME: can't remember the point of this or how it works
   await Promise.all([
-    promisify(query.getNonce).bind(query, address, startblock),
-    promisify(query.getNonce).bind(query, address, endblock)
+    query.getNonce(query, address, startblock),
+    query.getNonce(query, address, endblock)
   ])
 
   return findAllTxsInRange(provider, address, startblock, endblock, noop)
 }
 
-function sendAsync (rpcUrl, payload, cb) {
-  const requestParams = {
-    uri: rpcUrl,
+async function sendPromise (rpcUrl, payload) {
+  const body = JSON.stringify(payload)
+  const opts = {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(payload),
+    body,
     rejectUnauthorized: false
   }
 
-  xhr(requestParams, function (err, res, body) {
-    if (err) return cb(err)
+  const res = await fetch(rpcUrl, opts)
+  const data = await res.json()
 
-    // parse response
-    let data
-    try {
-      data = JSON.parse(body)
-    } catch (err) {
-      // console.error(RPC_ENDPOINT)
-      // console.error(body)
-      // console.error(err.stack)
-      return cb(err)
-    }
-
-    if (data.error) return cb(data.error)
-
-    // console.log('network:', payload.method, payload.params, '->', data.result)
-    cb(null, data)
-  })
+  if (data.error) {
+    throw new Error(`Error from rpc: ${JSON.stringify(data.error)} for ${body}`)
+  }
+  return data
 }
+
+module.exports = TxListProvider

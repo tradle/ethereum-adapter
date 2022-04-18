@@ -1,5 +1,3 @@
-const { promisify } = require('bluebird')
-
 const normalizeEngineError = (err, response) => {
   if (!err && response && response.error) {
     err = response.error
@@ -25,6 +23,5 @@ const flatten = arr => arr.reduce((all, some) => all.concat(some), [])
 
 module.exports = {
   getSend,
-  promisify,
   flatten
 }
