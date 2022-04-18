@@ -1,5 +1,4 @@
 
-const { inherits } = require('util')
 const xhr = process.browser ? require('xhr') : require('request')
 const EthQuery = require('@tradle/eth-store/query')
 const TxFinder = require('@tradle/eth-tx-finder')
@@ -12,33 +11,33 @@ const Subprovider = require('@tradle/web3-provider-engine/subproviders/subprovid
 
 const noop = function () {}
 
-inherits(TxListProvider, Subprovider)
-module.exports = TxListProvider
+class TxListProvider extends Subprovider {
+  constructor (opts = {}) {
+    super()
+    if (!opts.rpcUrl) throw new Error('expected "rpcUrl"')
 
-function TxListProvider (opts) {
-  if (!opts.rpcUrl) throw new Error('expected "rpcUrl"')
+    this.rpcUrl = opts.rpcUrl
+  }
 
-  this.rpcUrl = opts.rpcUrl
-}
+  handleRequest (payload, next, end) {
+    switch (payload.method) {
+      case 'eth_listTransactions':
+        listTransactions({
+          address: payload.params[0],
+          startblock: payload.params[1],
+          endblock: payload.params[2],
+          rpcUrl: this.rpcUrl
+        }, end)
 
-TxListProvider.prototype.handleRequest = function (payload, next, end) {
-  switch (payload.method) {
-    case 'eth_listTransactions':
-      listTransactions({
-        address: payload.params[0],
-        startblock: payload.params[1],
-        endblock: payload.params[2],
-        rpcUrl: this.rpcUrl
-      }, end)
-
-      break
-    default:
-      next()
-      break
+        break
+      default:
+        next()
+        break
+    }
   }
 }
 
-const listTransactions = async ({ address, startblock = 0, endblock = Infinity, rpcUrl }) => {
+async function listTransactions ({ address, startblock = 0, endblock = Infinity, rpcUrl }) {
   const results = Promise.all([
     findTxsFrom({ address, startblock, endblock, rpcUrl }),
     findTxsTo({ address, startblock, endblock, rpcUrl })
@@ -47,7 +46,7 @@ const listTransactions = async ({ address, startblock = 0, endblock = Infinity, 
   return flatten(results)
 }
 
-const findTxsTo = ({ address, startblock, endblock, rpcUrl }) => {
+function findTxsTo ({ address, startblock, endblock, rpcUrl }) {
   const provider = {
     sendAsync: sendAsync.bind(null, rpcUrl)
   }
@@ -59,7 +58,7 @@ const findTxsTo = ({ address, startblock, endblock, rpcUrl }) => {
   return findAllTxsInRangeTo(provider, address, startblock, endblock, noop)
 }
 
-const findTxsFrom = async ({ address, startblock, endblock, rpcUrl }) => {
+async function findTxsFrom ({ address, startblock, endblock, rpcUrl }) {
   const provider = {
     sendAsync: sendAsync.bind(null, rpcUrl)
   }
